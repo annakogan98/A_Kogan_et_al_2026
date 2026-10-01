@@ -1,0 +1,121 @@
+---
+title: "Figure S2"
+author: "Ben Carty"
+date: "2026-10-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+``` {r code}
+
+#!/usr/bin/env Rscript
+# ============================================================================
+# Fig S2 — GBP-cluster DNA methylation (all-context reanalysis)
+# Reworked from Anna's original Gviz script, against the NEW all-context bigWigs.
+#   * offline gene track (local GTF); colours matched to the original Fig S2
+#   * PER-PANEL display binning (heavy on the wide overview, raw on zooms)
+#   * Δ(C7-C1) track: sign-coloured blue(loss)/red(gain), honest ±100 axis
+# Run:  module load bio/R-bundle-Bioconductor/3.18-foss-2023a-R-4.3.2
+#       Rscript ~/scripts/FigS2_allcontext.R
+# ============================================================================
+suppressMessages({ library(Gviz); library(GenomicRanges); library(rtracklayer) })
+options(ucscChromosomeNames = FALSE)
+
+## ---------------- CONFIG (edit here) ---------------------------------------
+CTX     <- if (length(commandArgs(trailingOnly=TRUE)) >= 1) commandArgs(trailingOnly=TRUE)[1] else "cpg"  # cpg | cph
+CTXLAB  <- if (CTX == "cph") "CpH 5mC" else "CpG 5mC"
+# package root = the folder containing this script's parent (bigwigs/ annotation/ figures/ live here)
+.a <- commandArgs(FALSE); .f <- normalizePath(sub("^--file=", "", .a[grep("^--file=", .a)][1]))
+PKG     <- dirname(dirname(.f))
+BW_DIR  <- file.path(PKG, "bigwigs", CTX)     # per-condition 5mC modfraction bigWigs
+TRK_DIR <- file.path(PKG, "bigwigs", CTX)     # C7_vs_C1 delta bigWig (same folder)
+GTF     <- file.path(PKG, "annotation", "gbp_region.chr1.gtf")
+REGZ    <- file.path(PKG, "annotation")
+OUTDIR  <- file.path(PKG, "figures")
+CONDS   <- c("C1","C3","C5","C7")
+# >>> VERIFY this sample -> biological-state mapping matches your design <<<
+CONDLAB <- c(C1="naive", C3="priming", C5="primed", C7="reinduction")
+CONDCOL <- c(C1="#0289CD", C3="#52BC7A", C5="#0289CD", C7="#247546")  # blue=resting, green=IFN-active
+BIN_OVERVIEW <- 500     # bp binning for the wide cluster view
+BIN_ZOOM     <- 0       # bp binning for gene / E1E2 zooms (0 = raw per-CpG)
+DLIM    <- 100          # Δ track axis (pp) — ±100 = honest full-range scale
+NEG_COL <- "#2C6FBF"    # Δ loss  (C7 < C1) -> blue
+POS_COL <- "#C0392B"    # Δ gain  (C7 > C1) -> red
+dir.create(OUTDIR, showWarnings = FALSE, recursive = TRUE)
+
+## ---------------- helper: bin per-CpG scores to window means ---------------
+bin_points <- function(gr, size, chrom = "chr1") {
+  gr <- keepSeqlevels(gr, chrom, pruning.mode = "coarse")
+  if (size <= 0 || length(gr) == 0) return(gr)
+  L <- max(end(gr))
+  tiles <- GRanges(chrom, IRanges(seq(1, L, by = size), width = size))
+  h <- findOverlaps(tiles, gr)
+  if (length(h) == 0) return(gr)
+  agg <- tapply(gr$score[subjectHits(h)], queryHits(h), mean)
+  t2 <- tiles[as.integer(names(agg))]; t2$score <- as.numeric(agg); t2
+}
+
+## ---------------- import raw bigWigs ONCE (bin per-panel later) -------------
+meth_raw  <- lapply(CONDS, function(cc)
+  keepSeqlevels(import.bw(file.path(BW_DIR, sprintf("%s_%s_pileup_5mC_modfraction.bw", cc, CTX))),
+                "chr1", pruning.mode="coarse"))
+names(meth_raw) <- CONDS
+delta_raw <- keepSeqlevels(import.bw(file.path(TRK_DIR, "C7_vs_C1.5mC.delta.bw")),
+                           "chr1", pruning.mode="coarse")
+
+## ---------------- static annotation tracks (built once) --------------------
+g <- import(GTF)
+keep <- g$type == "exon" & !is.na(g$gene_name)
+if (!is.null(g$gene_biotype)) keep <- keep & g$gene_biotype == "protein_coding"
+ex <- g[keep]
+gene_track <- GeneRegionTrack(range=ex, genome="hg38", chromosome="chr1", name="Genes",
+  feature=as.character(ex$type), gene=ex$gene_id, transcript=ex$transcript_id, symbol=ex$gene_name,
+  exon=if(!is.null(ex$exon_id)) ex$exon_id else paste(ex$transcript_id, ex$exon_number),
+  transcriptAnnotation="symbol", collapseTranscripts="meta", stacking="squish",
+  just.group="above", fill="#333333", col="#333333", cex.group=0.6, fontcolor.group="black", lwd=1,
+  col.axis="black", col.title="black", background.title="white")
+e12 <- import(file.path(REGZ, "E1_E2_STAT1_enhancers.bed"))
+e12_track <- AnnotationTrack(e12, genome="hg38", chromosome="chr1", name="E1/E2",
+  id=sub("_STAT1","",e12$name), featureAnnotation="id", fontcolor.item="black",
+  fill="#C0392B", col="#C0392B", col.axis="black", col.title="black", background.title="white")
+axis <- GenomeAxisTrack()
+
+## ---------------- build the track list at a given bin size -----------------
+build_tracks <- function(binsize) {
+  mt <- Map(function(cc, gr)
+    DataTrack(bin_points(gr, binsize), genome="hg38", chromosome="chr1", type="h",
+              name=CONDLAB[[cc]], col=CONDCOL[[cc]], ylim=c(0,100),
+              col.axis="black", col.title="black", background.title="white"),
+    CONDS, meth_raw)
+  d <- bin_points(delta_raw, binsize)
+  pos <- d; pos$score <- pmax(d$score, 0); neg <- d; neg$score <- pmin(d$score, 0)
+  dtp <- DataTrack(pos, genome="hg38", chromosome="chr1", type="h", col=POS_COL,
+    ylim=c(-DLIM,DLIM), baseline=0, col.baseline="grey70", name="Δ 5mC (C7-C1)",
+    col.axis="black", col.title="black", background.title="white")
+  dtn <- DataTrack(neg, genome="hg38", chromosome="chr1", type="h", col=NEG_COL,
+    ylim=c(-DLIM,DLIM), baseline=0, name="Δ 5mC (C7-C1)")
+  dtrack <- OverlayTrack(list(dtn, dtp), name="Δ 5mC (C7-C1)",
+    col.axis="black", col.title="black", background.title="white")
+  c(list(axis), mt, list(dtrack, e12_track, gene_track))
+}
+
+## ---------------- plot ------------------------------------------------------
+panel <- function(from, to, file, binsize, rev=FALSE, title="") {
+  dev <- if (capabilities("cairo")) function(f) cairo_pdf(f, width=9, height=8) else function(f) pdf(f, width=9, height=8)
+  dev(file.path(OUTDIR, file))
+  plotTracks(build_tracks(binsize), from=from, to=to, chromosome="chr1", reverseStrand=rev,
+             main=title, cex.main=1, col.title="black", col.axis="black", background.title="white")
+  dev.off(); cat("  wrote", file.path(OUTDIR, file), sprintf("(bin=%dbp)\n", binsize))
+}
+cat("Rendering...\n")
+panel(88909115, 89583603,      sprintf("FigS2A_%s_GBPcluster.pdf", CTX), BIN_OVERVIEW,        title=sprintf("GBP cluster - %s", CTXLAB))
+panel(89280000, 89315000,      sprintf("FigS2_%s_E1E2.pdf", CTX),        BIN_ZOOM,            title=sprintf("E1/E2 STAT1 elements - %s", CTXLAB))
+panel(89254189, 89274860+1000, sprintf("FigS2B_%s_GBP5.pdf", CTX),       BIN_ZOOM, rev=TRUE,  title=sprintf("GBP5 - %s", CTXLAB))
+panel(89050319, 89067400,      sprintf("FigS2B_%s_GBP1.pdf", CTX),       BIN_ZOOM, rev=TRUE,  title=sprintf("GBP1 - %s", CTXLAB))
+cat("Done ->", OUTDIR, "\n")
+
+
+```

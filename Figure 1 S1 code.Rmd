@@ -1,0 +1,360 @@
+---
+title: "Fig 1 code"
+author: "Anna Kogan"
+date: "2026-10-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries}
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+library(ggpubr)
+```
+
+```{r general numbers}
+mbw <- read.csv("C:/Users/annak/Downloads/TTseq_multibw.csv", header = TRUE)
+mbw <- mbw [,2:ncol(mbw)]
+#calculations for the loci numbers mentioned in the text
+nrow(mbw)
+nrow(mbw[(mbw$avg_c3>0.1&mbw$avg_c7>0.1&mbw$ind>3),])
+nrow(mbw[(mbw$avg_c3>0.1&mbw$avg_c7>0.1&mbw$ind>3&mbw$mem>1.5),])
+
+mem <- mbw[(mbw$avg_c3>0.1&mbw$avg_c7>0.1&mbw$ind>3&mbw$mem>1.5),]
+
+nrow(mem[mem$gene_type=="miRNA",]) + nrow(mem[mem$gene_type2=="miRNA",])
+nrow(mem[mem$gene_type=="lncRNA",]) + nrow(mem[mem$gene_type2=="lncRNA",])
+
+#subset protein coding genes:
+mbw[is.na(mbw$gene_type2),]$gene_type2 <- "NA"
+pc <- mbw[mbw$gene_type2=="protein_coding",]
+
+nrow(pc[(pc$avg_c3>0.1&pc$avg_c7>0.1&pc$ind>3),])
+nrow(pc[(pc$avg_c3>0.1&pc$avg_c7>0.1&pc$ind>3&pc$mem>1.5),])
+```
+
+##### Figure 1C #####
+
+```{r Figure 1C}
+
+ggplot(pc[(pc$avg_c3>0.1&pc$avg_c7>0.1&pc$ind>3),],aes(x=log10(avg_c3),y = log10(avg_c7)))+
+  geom_point(aes(colour=ifelse(mem>1.5,"memorised","other")))+
+  scale_color_manual(values = c("red", "black"))+
+  xlim(-1,2)+
+  ylim(-1,2)+
+  geom_text(aes(label=ifelse((mem>1.75)&(chr %in% c(1:23,"X")),
+                             ifelse(gene_name=="gene_biotype",as.character(gene_type),as.character(gene_name)),'')),
+            position = "nudge",hjust=1.2,vjust=-0.2)+
+  theme_pubr()
+```
+
+##### Figure 1D #####
+
+``` {r Figure 1D}
+
+mbw_c3_thr <- mbw[(mbw$avg_c3>0.1)&(mbw$avg_c7>0.1),] #threshold priming and reinduction to avoid non-expressing genes
+mbw_c3_thr_mem <- mbw_c3_thr[(mbw_c3_thr$ind>1.5)&(mbw_c3_thr$mem>1.5),] #threshold induced & memorised genes
+mbw_c3_thr_mem_gg <- gather(mbw_c3_thr_mem[,18:21], key = "sample", value = "count")
+
+#adding the replicate median values to the plot:
+mbw_c3_thr_mem[,1:10] %>% gather(key = "sample", value = "count") %>% group_by(sample) %>% summarise(
+  count = median(count)) %>% separate_wider_delim(
+    sample, delim = "_", names = c("sample", "replicate")) -> mbw_c3_thr_mem_median
+
+mbw_c3_thr_mem_median$sample <- paste("avg_", mbw_c3_thr_mem_median$sample, sep = "")
+
+mbw_c3_thr_mem_gg <- gather(mbw_c3_thr_mem[,18:21], key = "sample", value = "count")
+
+#plot the individual loci and the median values together:
+ggplot(mbw_c3_thr_mem_gg, aes(x = sample, y = count)) +
+  geom_dotplot(binaxis = "y", stackdir = "center", binwidth = 0.05, alpha = 1)+
+  geom_dotplot(data = mbw_c3_thr_mem_median, aes(x = sample, y = count, fill = replicate),
+               binaxis = "y", stackdir = "center", binwidth = 0.1, alpha = 1)+
+  scale_y_log10()+
+  theme_pubr()
+###
+```
+
+Now to do statistics on the naive vs primed: 
+
+``` {r medians}
+# median values from memory genes used for statistical tests:
+mbw_c3_thr_mem[,1:10] %>% gather(key = "sample", value = "count") %>% group_by(sample) %>% summarise(
+  median = median(count)
+)
+
+# median values from all genes used for statistical tests:
+mbw_c3_thr[,1:10] %>% gather(key = "sample", value = "count") %>% group_by(sample) %>% summarise(
+  median = median(count)
+)
+
+mbw_c3_thr_ind <- mbw_c3_thr[(mbw_c3_thr$ind>3),] #threshold induced & memorised genes
+
+# median values from induced genes used for statistical tests:
+mbw_c3_thr_ind[,1:10] %>% gather(key = "sample", value = "count") %>% group_by(sample) %>% summarise(
+  median = median(count)
+)
+```
+
+##### Figure S1B #####
+
+``` {r Figure S1B}
+GBPs_mbw <- mbw[(grepl("GBP",mbw$gene_name,fixed = TRUE))&(mbw$chr=="1"),]
+HLAs_mbw <- mbw[(grepl("HLA",mbw$gene_name,fixed = TRUE))&(mbw$chr=="6"),]
+CXCL_mbw <- mbw[(grepl("CXCL",mbw$gene_name,fixed = TRUE))&(mbw$chr=="4"),]
+clusters_names <- c(GBPs_mbw$gene_name,HLAs_mbw$gene_name,CXCL_mbw$gene_name)
+
+ggplot(pc[(pc$avg_c3>0.1&pc$avg_c7>0.1&pc$ind>1.5),],aes(x=log10(avg_c3),y = log10(avg_c7)))+
+  geom_point(aes(colour=ifelse(mem>1.5,"memorised","other"), 
+                 size = ifelse(gene_name %in% clusters_names,"cluster", "other genes")))+
+  scale_size_manual(values = c(2,1))+
+  scale_color_manual(values = c("red", "black"))+
+  xlim(-1,2)+
+  ylim(-1,2)+
+  geom_text(aes(label=ifelse((gene_name %in% GBPs_mbw$gene_name)|
+                               (gene_name %in% HLAs_mbw$gene_name)|
+                               (gene_name %in% CXCL_mbw$gene_name),
+                             ifelse(gene_name=="gene_biotype",as.character(gene_type),as.character(gene_name)),'')),
+            position = "nudge",hjust=1.2,vjust=-0.2)+
+  theme_pubr()
+```
+
+#### Figures 1E,F and Figures S1C ####
+
+``` {r libraries}
+library(Gviz)
+library(GenomicRanges)
+library(Rsamtools)
+library(biomaRt)
+library(rtracklayer)
+library(ensembldb)
+library(EnsDb.Hsapiens.v86)
+```
+
+``` {r getting the files uploaded}
+setwd("directory with the averaged bigwigs") #directory with the averaged bigwigs
+bw_list <- dir()
+
+bw_names <- paste(substr((bw_list),0,2), substr((bw_list),15,18), sep = "")
+tracks_names <- paste(bw_names, "_track", sep = "")
+
+##### automated loading of all the bigwigs 
+
+for (i in 1:length(bw_list)){
+  var_name <- bw_names[i] 
+  assign(var_name, import.bw(bw_list[i]) |> keepSeqlevels(c(1:22, "X", "Y"), pruning.mode="coarse")
+  )
+}
+
+
+#loading the tracks just for chromosome 1 - remember to change the chromosome for the Fig1S genes
+
+for (i in 1:length(bw_list)){ 
+  var_name <- tracks_names[i]
+  range_name <- bw_names[i]
+  assign(var_name,
+         DataTrack(
+           range = get(range_name),
+           genome = "hg38", 
+           chromosome = 1,     #change the chromosome accordingly!
+           type = "h", 
+           col = "blue",
+           name = range_name))
+}
+
+GBP5_start <- 89254189
+GBP5_end <- 89274860
+
+GBP1_start <- 89050319
+GBP1_end <- 89067400
+
+CXCL10_start <- 76021118
+CXCL10_end <- 76023497
+
+UBD_start <- 29555515
+UBD_end <- 29559732
+
+SOCS1_start <- 11254417
+SOCS1_end <- 11256204
+
+intergenic_start <- 89224058
+intergenic_end <- 89231069
+
+GBPcl_start <- 88900000
+GBPcl_end <- 89800000
+
+GAPDH_start <- 6534754
+GAPDH_end <- 6538339
+
+rev_repl <- tracks_names[c(2,4,6,8)] #pick the needed tracks - here just the rev strand
+fwd_repl <- tracks_names[c(1,3,5,7)] #pick the needed tracks - here just the fwd strand
+
+```
+
+The following bit of code was updated after Ensembl disconnected biomaRt:
+
+``` {r genetracks}
+edb <- EnsDb.Hsapiens.v86  # Ensembl release 86 for hg38
+
+# Allow non-UCSC chromosome identifiers
+options(ucscChromosomeNames = TRUE)
+seqlevelsStyle(edb) <- "UCSC"
+
+
+gr <- getGeneRegionTrackForGviz(edb,
+                                chromosome = "chr1",
+                                start = intergenic_start,
+                                end   = intergenic_end)
+
+geneTrack <- GeneRegionTrack(gr,
+                             genome = "hg38",
+                             chromosome = "chr1",
+                             name = "Genes (Ensembl)",
+                             transcriptAnnotation = "symbol",  # shows gene names like GBP5
+                             col = "steelblue",
+                             fill = "lightblue")
+
+axisTrack <- GenomeAxisTrack(name = "Coordinates")
+```
+
+``` {r Figure S1C:intergenic locus}
+
+##### intergenic region zoom out
+plotTracks(c(list(axisTrack), lapply(rev_repl[c(1:4)], get),list(geneTrack)), from = intergenic_start, to = intergenic_end, 
+           reverseStrand = TRUE, ylim = c(0,30),
+           col.title = "black", col.axis = "black", col.grid = "black", background.title = "white")
+
+##### intergenic region zoom in
+plotTracks(c(list(axisTrack), lapply(rev_repl[c(1,3)], get),list(geneTrack)), from = intergenic_start, to = intergenic_end, 
+           reverseStrand = TRUE, ylim = c(0,0.1),
+           col.title = "black", col.axis = "black", col.grid = "black", background.title = "white")
+```
+
+
+the code below was run when useMart was available from ensembl, 
+  these would likely need editing either as above using ensembldb and EnsDb.Hsapiens.v86
+    or using a GTF file for annotations. 
+
+
+``` {r genetracks}
+ensembl <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+
+geneTrack_GBP5 <- BiomartGeneRegionTrack(
+  chromosome = "1",
+  start = GBP5_start,
+  end = GBP5_end,
+  name = "Gene",
+  filter = list(with_refseq_mrna=TRUE), 
+  transcriptAnnotation = "symbol",  
+  biomart = ensembl                    
+)
+
+geneTrack_GBP1 <- BiomartGeneRegionTrack(
+  chromosome = "1",
+  start = GBP1_start,
+  end = GBP1_end,
+  name = "Gene",
+  filter = list(with_refseq_mrna=TRUE), 
+  transcriptAnnotation = "symbol",  
+  biomart = ensembl                    
+)
+
+geneTrack_CXCL10 <- BiomartGeneRegionTrack(
+  chromosome = "4",
+  start = CXCL10_start,
+  end = CXCL10_end,
+  name = "Gene",
+  filter = list(with_refseq_mrna=TRUE), 
+  transcriptAnnotation = "symbol",  
+  biomart = ensembl                    
+)
+
+geneTrack_UBD <- BiomartGeneRegionTrack(
+  chromosome = "6",
+  start = UBD_start,
+  end = UBD_end,
+  name = "Gene",
+  filter = list(with_refseq_mrna=TRUE), 
+  transcriptAnnotation = "symbol", 
+  biomart = ensembl                   
+)
+
+geneTrack_SOCS1 <- BiomartGeneRegionTrack(
+  chromosome = "16",
+  start = SOCS1_start,
+  end = SOCS1_end,
+  name = "Gene",
+  filter = list(with_refseq_mrna=TRUE), 
+  transcriptAnnotation = "symbol",  
+  biomart = ensembl                   
+)
+
+geneTrack_GAPDH <- BiomartGeneRegionTrack(
+  chromosome = "12",
+  start = GAPDH_start,
+  end = GAPDH_end,
+  name = "Gene",
+  filter = list(with_refseq_mrna=TRUE), 
+  transcriptAnnotation = "symbol",  
+  biomart = ensembl                    
+)
+```
+
+
+``` {r Figure 1E-F}
+##### GBP5 zoom out
+plotTracks(c(lapply(rev_repl[c(1:4)], get),geneTrack_GBP5), from = GBP5_start, to = GBP5_end + 1000, 
+           reverseStrand = TRUE, ylim = c(0,30),
+           col.title = "black", col.axis = "black", col.grid = "black", background.title = "white")
+
+##### GBP5 zoom in
+plotTracks(c(lapply(rev_repl[c(1,3)], get),geneTrack_GBP5,gtrack), from = GBP5_start, to = GBP5_end + 1000, 
+           reverseStrand = TRUE, ylim = c(0,0.1),
+           col.title = "black", col.axis = "black", col.grid = "black", background.title = "white")
+
+##### GBP1 zoom out
+plotTracks(c(lapply(rev_repl[c(1:4)], get),geneTrack_GBP1), from = GBP1_start, to = GBP1_end, 
+           reverseStrand = TRUE, ylim = c(0,30),
+           col.title = "black", col.axis = "black", col.grid = "black", background.title = "white")
+
+##### GBP1 zoom in
+plotTracks(c(lapply(rev_repl[c(1,3)], get),geneTrack_GBP1), from = GBP1_start, to = GBP1_end, 
+           reverseStrand = TRUE, ylim = c(0,0.03),
+           col.title = "black", col.axis = "black", col.grid = "black", background.title = "white")
+```
+
+
+``` {r Figure S1C}
+#### CXCL10 - remember to reload the tracks for chr 4
+plotTracks(c(lapply(rev_repl, get),geneTrack_CXCL10), from = CXCL10_start-1000, to = CXCL10_end+1000, 
+           reverseStrand = TRUE, ylim = c(0,30),
+           col.title = "black", col.axis = "black", col.grid = "black", background.title = "white")
+
+plotTracks(c(lapply(rev_repl[c(1,3)], get),geneTrack_CXCL10), from = CXCL10_start-1000, to = CXCL10_end+1000, 
+           reverseStrand = TRUE, ylim = c(0,0.03),
+           col.title = "black", col.axis = "black", col.grid = "black", background.title = "white")
+
+####UBD - remember to reload the tracks for chr 6
+plotTracks(c(lapply(rev_repl, get),geneTrack_UBD), from = UBD_start-1000, to = UBD_end+1000, 
+           reverseStrand = TRUE, ylim = c(0,8),
+           col.title = "black", col.axis = "black", col.grid = "black", background.title = "white")
+
+plotTracks(c(lapply(rev_repl[c(1,3)], get),geneTrack_UBD), from = UBD_start-1000, to = UBD_end+1000, 
+           reverseStrand = TRUE, ylim = c(0,0.03),
+           col.title = "black", col.axis = "black", col.grid = "black", background.title = "white")
+
+####SOCS1 - remember to reload the tracks for chr 16
+plotTracks(c(lapply(rev_repl, get),geneTrack_SOCS1), from = SOCS1_start-1000, to = SOCS1_end+1000, 
+           reverseStrand = TRUE, ylim = c(0,6),
+           col.title = "black", col.axis = "black", col.grid = "black", background.title = "white")
+
+####GAPDH - remember to reload the tracks for chr 12
+plotTracks(c(lapply(fwd_repl, get),geneTrack_GAPDH), from = GAPDH_start-1000, to = GAPDH_end+1000, 
+           reverseStrand = FALSE, ylim = c(0,1.2),
+           col.title = "black", col.axis = "black", col.grid = "black", background.title = "white")
+```
+

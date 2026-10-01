@@ -1,0 +1,409 @@
+---
+title: "M090_full_analysis_Fig3D"
+author: "Anna Kogan"
+date: "2026-05-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r libraries and wd, echo = FALSE, warning=FALSE,message=FALSE}
+library(ggplot2)
+library(ggpubr)
+library(dplyr)
+library(tidyverse)
+```
+
+First: get the list of the results of the ImageJ analysis.
+"Valid numbers" cleans up the data to exclude FOVs that didn't make it through the tracking 
+
+```{r Lists of replicates}
+path_d1_r1 = "E:/M090_new_analysis/M090_r1/M090v1_d1 tiff/analysis"
+excels_d1_r1 <- list.files(path_d1_r1, pattern = ".csv", full.names = TRUE)
+valid.numbers_r1 <- c(1:2, 5:8, 10:16, 19, 21:22, 31:38)
+valid.files_d1_r1 <- excels_d1_r1[valid.numbers_r1]
+path_d2_r1 = "E:/M090_new_analysis/M090_r1/M090v1_d2 tiff/analysis"
+excels_d2_r1 <- list.files(path_d2_r1, pattern = ".csv", full.names = TRUE)
+valid.files_d2_r1 <- excels_d2_r1[valid.numbers_r1]
+
+path_d1_r2 = "E:/M090_new_analysis/M090_r4/M090v5_d1 tiff/analysis"
+excels_d1_r2 <- list.files(path_d1_r2, pattern = ".csv", full.names = TRUE)
+valid.numbers_r2 <- c(1:8,10,11,13:17,19,21:24,26,27,29:36,38:42,44,45)
+valid.files_d1_r2 <- excels_d1_r2[valid.numbers_r2]
+path_d2_r2 = "E:/M090_new_analysis/M090_r4/M090v5_d2 tiff/analysis"
+excels_d2_r2 <- list.files(path_d2_r2, pattern = ".csv", full.names = TRUE)
+valid.files_d2_r2 <- excels_d2_r2[valid.numbers_r2]
+
+path_d1_r3 = "E:/M090_new_analysis/M090_r3/M090v4_d1 tiff/analysis"
+excels_d1_r3 <- list.files(path_d1_r3, pattern = ".csv", full.names = TRUE)
+valid.numbers_r3 <- c(1:3,7:9,11:12,14:17,19:26,30:32,34,36:40,42,44:46,48:49,51:55)
+valid.numbers_r3 <- valid.numbers_r3[!valid.numbers_r3 %in% c(16,53,46,36,40)]
+valid.files_d1_r3 <- excels_d1_r3[valid.numbers_r3]
+path_d2_r3 = "E:/M090_new_analysis/M090_r3/M090v4_d2 tiff/analysis"
+excels_d2_r3 <- list.files(path_d2_r3, pattern = ".csv", full.names = TRUE)
+valid.files_d2_r3 <- excels_d2_r3[valid.numbers_r3]
+```
+
+Now read the data from the csv files in the folders to get the intensity values
+
+``` {r Dataframes of replicates}
+##### repl 1 processing #####
+initial_intensities_r1 <- lapply(valid.files_d1_r1, function(file) {
+  as.numeric(read.csv(file, header = TRUE)[,3])}) #reads mean intensities
+progeny_intensities_r1 <- lapply(valid.files_d2_r1, function(file) {
+  as.numeric(read.csv(file, header = TRUE)[,3])}) #reads mean intensities
+
+numbers_rep_r1 <- rep(valid.numbers_r1, sapply(progeny_intensities_r1, length))
+initial_rep_r1 <- rep(initial_intensities_r1, sapply(progeny_intensities_r1, length))
+progeny_values_r1 <- unlist(progeny_intensities_r1)
+
+# Combine into a data frame
+plot_data_r1 <- data.frame(
+  FOV_numbers = as.numeric(numbers_rep_r1),
+  Initial_Intensity = as.numeric(initial_rep_r1),
+  Progeny_Intensity = as.numeric(progeny_values_r1)
+)
+
+
+##### repl 2 processing #####
+initial_intensities_r2 <- lapply(valid.files_d1_r2, function(file) {
+  as.numeric(read.csv(file, header = TRUE)[,3])}) #reads mean intensities
+progeny_intensities_r2 <- lapply(valid.files_d2_r2, function(file) {
+  as.numeric(read.csv(file, header = TRUE)[,3])}) #reads mean intensities
+
+numbers_rep_r2 <- rep(valid.numbers_r2, sapply(progeny_intensities_r2, length))
+initial_rep_r2 <- rep(initial_intensities_r2, sapply(progeny_intensities_r2, length))
+progeny_values_r2 <- unlist(progeny_intensities_r2)
+
+# Combine into a data frame
+plot_data_r2 <- data.frame(
+  FOV_numbers = as.numeric(numbers_rep_r2),
+  Initial_Intensity = as.numeric(initial_rep_r2),
+  Progeny_Intensity = as.numeric(progeny_values_r2)
+)
+
+
+##### repl 3 processing #####
+initial_intensities_r3 <- lapply(valid.files_d1_r3, function(file) {
+  as.numeric(read.csv(file, header = TRUE)[,3])}) #reads mean intensities
+progeny_intensities_r3 <- lapply(valid.files_d2_r3, function(file) {
+  as.numeric(read.csv(file, header = TRUE)[,3])}) #reads mean intensities
+
+numbers_rep_r3 <- rep(valid.numbers_r3, sapply(progeny_intensities_r3, length))
+initial_rep_r3 <- rep(initial_intensities_r3, sapply(progeny_intensities_r3, length))
+progeny_values_r3 <- unlist(progeny_intensities_r3)
+
+# Combine into a data frame
+plot_data_r3 <- data.frame(
+  FOV_numbers = as.numeric(numbers_rep_r3),
+  Initial_Intensity = as.numeric(initial_rep_r3),
+  Progeny_Intensity = as.numeric(progeny_values_r3)
+)
+```
+
+This chunk is optional and isn't used in the paper
+Can be done to check the individual replicates
+
+
+``` {r Optional non-normalised plots}
+
+#making total distribution
+initial_r1 <- data.frame(
+  Y_pos = min(plot_data_r1$Progeny_Intensity)-100,
+  Initial_Intensity = unique(plot_data_r1$Initial_Intensity)
+)
+progeny_r1 <- data.frame(
+  X_pos = min(plot_data_r1$Initial_Intensity)-100,
+  Progeny_Intensity = plot_data_r1$Progeny_Intensity
+)
+
+# Plot before normalisation
+ggplot(data = plot_data_r1, aes(x = Initial_Intensity, y = Progeny_Intensity)) +
+  #geom_boxplot(aes(group = FOV_numbers), fill = "lightgreen") + 
+  geom_point(fill = "black") +
+  geom_line(data = plot_data_r1, aes(x = Initial_Intensity, y = Progeny_Intensity, group = FOV_numbers))+
+  geom_boxplot(data = initial_r1, aes(y=Y_pos, x = Initial_Intensity), width = 100, outliers = F)+
+  geom_boxplot(data = progeny_r1, aes(x=X_pos, y = Progeny_Intensity), width = 100, outliers = F)+
+  theme_pubr()
+
+##check that these are the same: 
+#length(unlist(initial_intensities_r2))
+#length(unique(plot_data_r2$Initial_Intensity))
+
+#making total distribution
+initial_r2 <- data.frame(
+  Y_pos = min(plot_data_r2$Progeny_Intensity)-100,
+  Initial_Intensity = unique(plot_data_r2$Initial_Intensity)
+)
+progeny_r2 <- data.frame(
+  X_pos = min(plot_data_r2$Initial_Intensity)-100,
+  Progeny_Intensity = plot_data_r2$Progeny_Intensity
+)
+
+# Plot before normalisation
+ggplot(data = plot_data_r2, aes(x = Initial_Intensity, y = Progeny_Intensity)) +
+  geom_boxplot(aes(group = FOV_numbers), fill = "lightgreen") + 
+  geom_point(fill = "black") +
+  geom_boxplot(data = initial_r2, aes(y=Y_pos, x = Initial_Intensity), width = 100, outliers = F)+
+  geom_boxplot(data = progeny_r2, aes(x=X_pos, y = Progeny_Intensity), width = 100, outliers = F)+
+  theme_pubr()
+
+
+##check that these are the same: 
+#length(unlist(initial_intensities_r3))
+#length(unique(plot_data_r3$Initial_Intensity))
+
+#making total distribution
+initial_r3 <- data.frame(
+  Y_pos = min(plot_data_r3$Progeny_Intensity)-100,
+  Initial_Intensity = unique(plot_data_r3$Initial_Intensity)
+)
+progeny_r3 <- data.frame(
+  X_pos = min(plot_data_r3$Initial_Intensity)-50,
+  Progeny_Intensity = plot_data_r3$Progeny_Intensity
+)
+
+# Plot before normalisation
+ggplot(data = plot_data_r3, aes(x = Initial_Intensity, y = Progeny_Intensity)) +
+  geom_boxplot(aes(group = FOV_numbers), fill = "lightgreen") + 
+  geom_point(fill = "black") +
+  geom_boxplot(data = initial_r3, aes(y=Y_pos, x = Initial_Intensity), width = 100, outliers = F)+
+  geom_boxplot(data = progeny_r3, aes(x=X_pos, y = Progeny_Intensity), width = 30, outliers = F)+
+  theme_pubr()
+```
+
+Because the average intensity differs between the replicates,
+we normalise these based on the mean and the sd. 
+
+``` {r Normalisation}
+
+subtr_d1_r1 <- mean(plot_data_r1$Initial_Intensity)
+div_d1_r1 <- sd(plot_data_r1$Initial_Intensity)
+subtr_d2_r1 <- mean(plot_data_r1$Progeny_Intensity)
+div_d2_r1 <- sd(plot_data_r1$Progeny_Intensity)
+
+plot_data_sd_r1 <- data.frame(
+  FOV_numbers = plot_data_r1$FOV_numbers,
+  Initial_Intensity = (plot_data_r1$Initial_Intensity - subtr_d1_r1)/div_d1_r1*400,
+  Progeny_Intensity = (plot_data_r1$Progeny_Intensity - subtr_d2_r1)/div_d2_r1*400
+)
+
+subtr_d1_r2 <- mean(plot_data_r2$Initial_Intensity)
+div_d1_r2 <- sd(plot_data_r2$Initial_Intensity)
+subtr_d2_r2 <- mean(plot_data_r2$Progeny_Intensity)
+div_d2_r2 <- sd(plot_data_r2$Progeny_Intensity)
+
+plot_data_sd_r2 <- data.frame(
+  FOV_numbers = plot_data_r2$FOV_numbers,
+  Initial_Intensity = (plot_data_r2$Initial_Intensity - subtr_d1_r2)/div_d1_r2*400,
+  Progeny_Intensity = (plot_data_r2$Progeny_Intensity - subtr_d2_r2)/div_d2_r2*400
+)
+
+subtr_d1_r3 <- mean(plot_data_r3$Initial_Intensity)
+div_d1_r3 <- sd(plot_data_r3$Initial_Intensity)
+subtr_d2_r3 <- mean(plot_data_r3$Progeny_Intensity)
+div_d2_r3 <- sd(plot_data_r3$Progeny_Intensity)
+
+plot_data_sd_r3 <- data.frame(
+  FOV_numbers = plot_data_r3$FOV_numbers,
+  Initial_Intensity = (plot_data_r3$Initial_Intensity - subtr_d1_r3)/div_d1_r3*400,
+  Progeny_Intensity = (plot_data_r3$Progeny_Intensity - subtr_d2_r3)/div_d2_r3*400
+)
+```
+
+
+Now to combine all the replicates into a single dataframe: 
+
+``` {r Single dataframe}
+repl1 <- plot_data_sd_r1
+repl1$repl <- 1
+repl2 <- plot_data_sd_r2
+repl2$repl <- 2
+repl3 <- plot_data_sd_r3
+repl3$repl <- 3
+
+repl2$FOV_numbers <- repl2$FOV_numbers + max(repl1$FOV_numbers)
+repl3$FOV_numbers <- repl3$FOV_numbers + max(repl2$FOV_numbers)
+
+total_data <- rbind(repl1, repl2, repl3)
+
+##for the barplots of total distribution: 
+initial <- data.frame(
+  Y_pos = min(total_data$Progeny_Intensity)-50,
+  Initial_Intensity = unique(total_data$Initial_Intensity)
+)
+progeny <- data.frame(
+  X_pos = min(total_data$Initial_Intensity)-50,
+  Progeny_Intensity = total_data$Progeny_Intensity
+)
+
+```
+
+
+``` {r Plotting the normalised replicates}
+
+#### normalised individual dots per replicate
+ggplot(data = total_data[(total_data$repl == 1),], aes(x = round(Initial_Intensity), 
+                                                       y = round(Progeny_Intensity))) +
+  geom_point(aes(color = as.factor(repl)),size = 1.5) +
+  geom_smooth(colour="black")+#(aes(color = as.factor(repl)))+
+  stat_cor(aes(color = as.factor(repl)),method="pearson")+
+  geom_line(data = total_data[(total_data$repl == 1),], aes(x = round(Initial_Intensity), 
+                                                            y = round(Progeny_Intensity), group = FOV_numbers))+
+  #geom_boxplot(data = initial, aes(y=Y_pos, x = Initial_Intensity), width = 50, outliers = F)+
+  #geom_boxplot(data = progeny, aes(x=X_pos, y = Progeny_Intensity), width = 20, outliers = F)+
+  #geom_label(aes(label = FOV_numbers), position = "nudge") +
+theme_pubr()
+
+ggplot(data = total_data[(total_data$repl == 2),], aes(x = round(Initial_Intensity), 
+                                                       y = round(Progeny_Intensity))) +
+  geom_point(aes(color = as.factor(repl)),size = 1.5) +
+  geom_smooth(colour="black")+#(aes(color = as.factor(repl)))+
+  stat_cor(aes(color = as.factor(repl)),method="pearson")+
+  geom_line(data = total_data[(total_data$repl == 2),], aes(x = round(Initial_Intensity), 
+                                                            y = round(Progeny_Intensity), group = FOV_numbers))+
+  #geom_boxplot(data = initial, aes(y=Y_pos, x = Initial_Intensity), width = 50, outliers = F)+
+  #geom_boxplot(data = progeny, aes(x=X_pos, y = Progeny_Intensity), width = 20, outliers = F)+
+  #geom_label(aes(label = FOV_numbers), position = "nudge") +
+  theme_pubr()
+
+ggplot(data = total_data[(total_data$repl == 3),], aes(x = round(Initial_Intensity), 
+                                                       y = round(Progeny_Intensity))) +
+  geom_point(aes(color = as.factor(repl)),size = 1.5) +
+  geom_smooth(colour="black")+#(aes(color = as.factor(repl)))+
+  stat_cor(aes(color = as.factor(repl)),method="pearson")+
+  geom_line(data = total_data[(total_data$repl == 3),], aes(x = round(Initial_Intensity), 
+                                                            y = round(Progeny_Intensity), group = FOV_numbers))+
+  #geom_boxplot(data = initial, aes(y=Y_pos, x = Initial_Intensity), width = 50, outliers = F)+
+  #geom_boxplot(data = progeny, aes(x=X_pos, y = Progeny_Intensity), width = 20, outliers = F)+
+  #geom_label(aes(label = FOV_numbers), position = "nudge") +
+  theme_pubr()
+```
+
+
+Creating the main plot for the paper
+
+``` {r Plotting the total data}
+
+total_data_summ <- total_data %>% group_by(FOV_numbers) %>% summarise(
+  Initial_Intensity = mean(Initial_Intensity),
+  prog_mean = mean(Progeny_Intensity),
+  prog_sd = sd(Progeny_Intensity),
+  repl = mean(repl)
+  )
+
+ggplot(data = total_data_summ, aes(x = round(Initial_Intensity), y = round(prog_mean))) +
+  geom_point(aes(color = as.factor(repl)),size = 1.5) +
+  geom_smooth(fill = "white", colour = "black") +
+  stat_cor(aes(color = as.factor(repl)),method="pearson")+
+  geom_errorbar(aes(ymin = (prog_mean - prog_sd),ymax = (prog_mean + prog_sd)), width = 10) +
+  theme_pubr()
+
+
+ggplot() +
+  geom_point(data = total_data_summ, aes(x = round(Initial_Intensity), y = round(prog_mean), 
+                                         color = as.factor(repl)),size = 1.5) +
+  geom_smooth(data = total_data, aes(x = round(Initial_Intensity), y = round(Progeny_Intensity)), 
+              fill = "white", colour="black")+
+  stat_cor(data = total_data, aes(x = round(Initial_Intensity), y = round(Progeny_Intensity)),method="pearson")+
+  geom_errorbar(data = total_data_summ, aes(x = round(Initial_Intensity), ymin = (prog_mean - prog_sd),
+                                            ymax = (prog_mean + prog_sd)), width = 40) +
+  xlab("Founder Intensity, A.U.")+
+  ylab("Progeny Intenisty, A.U.")+
+  scale_x_continuous(breaks=c(-500,0,500, 1000), limits = c(-900,2000))+
+  scale_y_continuous(breaks=c(-500,0,500,1000,1500,2000),limits = c(-750,1800)) +
+  theme_pubr()
+
+```
+
+
+
+
+
+``` {r Standard deviation plots}
+
+total_data_sd <- total_data %>% group_by(FOV_numbers) %>% summarise(
+  Initial_Intensity = mean(Initial_Intensity),
+  prog_sd = sd(Progeny_Intensity),
+  repl = mean(repl)
+)
+
+ggplot(data = total_data_sd, aes(x = round(Initial_Intensity), y = round(prog_sd))) +
+  geom_point(aes(color = as.factor(repl)),size = 1.5) +
+  stat_cor(aes(color = as.factor(repl)),method="pearson")+
+  theme_pubr()
+
+ggplot(data = total_data_sd, aes(x = round(Initial_Intensity), y = round(prog_sd))) +
+  geom_point(aes(color = as.factor(repl)),size = 1.5) +
+  stat_cor(method="pearson")+
+  theme_pubr()
+
+```
+
+``` {r Number of progeny plots}
+
+total_data_N <- total_data %>% group_by(FOV_numbers) %>% summarise(
+  Initial_Intensity = mean(Initial_Intensity),
+  prog_hrs = 96/log2(n()),
+  repl = mean(repl)
+)
+
+ggplot(data = total_data_N, aes(x = round(Initial_Intensity), y = prog_hrs)) +
+  geom_point(aes(color = as.factor(repl)),size = 1.5) +
+  stat_cor(aes(color = as.factor(repl)),method="pearson")+
+  scale_y_continuous(breaks=c(24, 48),limits = c(15,60)) +
+  theme_pubr()
+
+ggplot(data = total_data_N, aes(x = round(Initial_Intensity), y = prog_hrs)) +
+  geom_point(aes(color = as.factor(repl)),size = 1.5) +
+  stat_cor(method="pearson")+
+  scale_y_continuous(breaks=c(24, 48),limits = c(15,60)) +
+  theme_pubr()
+
+```
+``` {r from Claude for division times calculations}
+
+total_data_N <- total_data %>% group_by(FOV_numbers) %>% summarise(
+  Initial_Intensity = mean(Initial_Intensity),
+  prog_N = n(),
+  repl = mean(repl)
+)
+
+# 1) Growth rate per FOV (divisions/hour), assuming exponential growth, no death
+fov <- total_data_N %>%
+  mutate(rate = log2(prog_N) / 96)
+
+# 2) Average growth rate per replicate, then invert to get division time
+per_repl <- fov %>%
+  group_by(repl) %>%
+  summarise(
+    n_FOV    = n(),
+    rate     = mean(rate),
+    div_time = 1 / rate,                     # hours per division
+    div_3d   = 72  / div_time,               # divisions in a 3-day window
+    div_6d   = 144 / div_time,               # divisions in a 6-day window
+    .groups  = "drop"
+  )
+print(per_repl)
+
+# 3) Mean +- SD across replicates
+summ <- per_repl %>%
+  summarise(across(c(div_time, div_3d, div_6d),
+                   list(mean = mean, sd = sd)))
+print(summ)
+
+# 4) Fill in the sentence
+with(summ, cat(sprintf(
+  paste0("Furthermore, from the number of progeny, we derived an average cell division ",
+         "time of %.1f \u00b1 %.1f hours, which corresponds to %.1f \u00b1 %.1f cell divisions ",
+         "in a 3-day memory window or %.1f \u00b1 %.1f in a standard 6-day memory window, ",
+         "assuming no cell death.\n"),
+  div_time_mean, div_time_sd, div_3d_mean, div_3d_sd, div_6d_mean, div_6d_sd)))
+
+```
+
+

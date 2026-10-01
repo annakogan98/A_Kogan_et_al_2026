@@ -1,0 +1,210 @@
+---
+title: "Figure 4E code"
+author: "Anna Kogan"
+date: "2026-09-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Libraries, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(ggpubr)
+library(tidyverse)
+library(dplyr)
+library("RColorBrewer")
+library(scales)
+```
+
+"Main folder" - folder on the drive with the whole experiment In this main folder 1 sub folder = 1 experimental sample "All directories" - a full list (with paths) of the directories in the folder
+
+```{r Folder}
+main_folder <- "D:/Anna/M037_9_GBP5/"
+all_dirs <- paste(list.files(main_folder, full.names = TRUE), "/", sep = "")
+all_dir_names <- list.files(main_folder, full.names = FALSE)
+
+print(paste("Number of folders:",length(all_dirs), sep = " "))
+print(paste("The first few folders:", paste(all_dir_names[1], all_dir_names[2], all_dir_names[3], all_dir_names[4], sep = " "), sep = " "))
+```
+This chunk of the code goes through each folder and finds the results from the 3D object counter (csv files) 1) Generates a csv with mRNA counts per cell for each sample 2) Generates a csv with the number of TS per cell for each sample 3) Generates a csv with a list of all TS and their integrated densities for each sample
+
+Commented out - bits that could generate a histogram of each of those csv and save it in the same folder, run if needed
+
+NB! Modify the intensity and size threshold that were used in 3D object counter to correctly detect and label files
+
+```{r Make_SCV_files_for_each_sample}
+
+for (d in 1:length(all_dirs)) {
+
+dir_masks <- paste(all_dirs[d], "OutputMASK/masks/singlecellmasks/", sep = "")
+subfolder.names<-list.dirs(dir_masks)
+
+#### mRNA ####
+#collects count of mRNA per cell to the out.file
+out.file<-"" 
+arrays3D <- list.files(subfolder.names, pattern = "160_10",full.names = TRUE)
+for(i in 1:length(arrays3D)){
+  new_file <- read.delim(arrays3D[i], header = TRUE, sep = ",", dec = ".")
+  spot_count <- nrow(new_file)
+  out.file <- rbind(out.file, spot_count)
+}
+
+out.file <- out.file[-1]
+out.file <- as.integer(out.file)
+
+write.csv(x = out.file, file = paste(all_dirs[d], all_dir_names[d], "_160_10_Ex_Result.csv", sep=""))
+
+#### mRNA plot ####
+# mRNA_count <- data.frame(out.file)
+# mRNA <- ggplot(mRNA_count, aes(x=out.file)) +
+#   stat_count()+
+#   labs(y = "", x = "Number of mRNA per cell") +
+#   theme_pubr()
+# mRNA
+# ggsave(plot = mRNA, device = "pdf", main_folder = all_dirs[d], filename = paste(all_dir_names[d],"_mRNA.pdf"))
+
+}
+
+```
+
+```{r Column_names}
+subfolder.names <- list.files(main_folder, full.names = TRUE)
+
+#collects subfolder names for the sample names, change dependent on your pattern
+colnames.all.files <- list.files(main_folder)
+
+for (i in 1:length(colnames.all.files)){
+  colnames.all.files[i] <-
+    sub("_", " ", sub("_", " ", colnames.all.files[i]))
+}
+
+#collects subfolder names for the sample names, input your pattern
+colnames.merged.files <- list.files(main_folder)[(1:16)*3-2]
+for (i in 1:length(colnames.merged.files)){
+  colnames.merged.files[i] <-
+    sub("_", " ", sub("_", " ", substr(colnames.merged.files[i], 1, nchar(colnames.merged.files[i])-2)))
+}
+
+
+print(paste("The first few replicate names:",paste(colnames.all.files[1:5], collapse = ', '), sep = " "))
+
+print(paste("The first few sample names:",paste(colnames.merged.files[1:3], collapse = ', '), sep = " "))
+
+
+
+```
+
+Analysis for mRNA:
+
+Collect two databases: one with individual replicates, one with merged replicates
+
+```{r mRNA_all}
+
+#makes a list of csv files:
+arrays3D <- list.files(subfolder.names, pattern = "_160_10_Ex_Result",full.names = TRUE)
+
+#reads the first file
+first.file <- read.delim(arrays3D[1], header = TRUE, sep = ",", dec = ".")
+colnames(first.file) <- c("cell", "1")
+
+#cbinds the other files using first column to merge them
+for(i in 2:(length(arrays3D))){
+  new_file <- ""
+  new_file <- read.delim(arrays3D[i], header = TRUE, sep = ",", dec = ".") 
+  colnames(new_file) <- c("cell", (i))
+  first.file <- merge(first.file, new_file, 
+                    by = "cell", all = TRUE)
+  
+}
+
+mRNA_all  <-  first.file[,-1]
+colnames(mRNA_all) <- colnames.all.files
+
+# ##for further Prism analysis:
+# mRNA_means <- data.frame(
+#   Column_Names = colnames(mRNA_all),
+#   Ave = sapply(mRNA_all, mean, na.rm = TRUE)
+# )
+# mRNA_means$Ave
+# 
+# 
+# write.csv(mRNA_all, file = "D:/Anna/M037_9_mRNA_all.csv")
+
+```
+
+```{r mRNA_merged}
+
+#makes a list of csv files:
+arrays3D <- list.files(subfolder.names, pattern = "_160_10_Ex_Result",full.names = TRUE)
+
+#reads the first 3 files
+first.file <- read.delim(arrays3D[1], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+colnames(first.file) <- c("cell", "1")
+
+second.file <- read.delim(arrays3D[2], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+colnames(second.file) <- c("cell", "1")
+
+third.file <- read.delim(arrays3D[3], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+colnames(third.file) <- c("cell", "1")
+
+first.file <- rbind(first.file, second.file, third.file)
+first.file[,1] <- 1:nrow(first.file)
+
+
+#cbinds the other files using first column to merge them
+for(i in 2:(length(arrays3D)/3)){
+  
+  file1 <- read.delim(arrays3D[3*i-2], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+  colnames(file1) <- c("cell", (3*i-2))
+  
+  file2 <- read.delim(arrays3D[3*i-1], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+  colnames(file2) <- c("cell", (3*i-2))
+  
+  file3 <- read.delim(arrays3D[3*i], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+  colnames(file3) <- c("cell", (3*i-2))
+  
+  file1 <- rbind(file1, file2, file3)
+  
+  file1[,1] <- 1:nrow(file1)
+  first.file <- merge(first.file, file1, 
+                      by = "cell", all = TRUE)
+  
+}
+
+mRNA_merged  <-  first.file[,-1]
+colnames(mRNA_merged) <- colnames.merged.files
+```
+
+Plot:
+
+```{r mRNA_all_plot}
+#prepare for plotting
+mRNA_all_gathered <- na.omit(gather(mRNA_all, key="sample",value = "mRNA_per_cell" ))
+#plot
+ggplot(mRNA_all_gathered, aes(y = mRNA_per_cell, x = sample)) +
+  geom_violin(trim = TRUE, fill="peru", scale = "width",
+             draw_quantiles = c(0.25, 0.5, 0.75)) +
+  stat_summary_bin(fun = "mean", geom = "bar", colour = "black", fill = "white", alpha = 0.5)+
+  labs(title="Distribution of mRNA",
+       x ="", y = "mRNA per cell")+
+  theme_pubr() +
+  theme(axis.text.x=element_text(angle = 60, hjust = 1))
+```
+
+Plot used in Figure 4E:
+
+```{r mRNA_merged_plot}
+#prepare for plotting
+mRNA_merged_gathered <- na.omit(gather(mRNA_merged, key="sample",value = "mRNA_per_cell" ))
+#plot
+ggplot(mRNA_merged_gathered, aes(y = mRNA_per_cell, x = sample)) +
+  geom_violin(trim = TRUE, fill="peru", scale = "width",
+             draw_quantiles = c(0.25, 0.5, 0.75)) +
+  stat_summary_bin(fun = "mean", geom = "bar", colour = "black", fill = "white", alpha = 0.5)+
+  labs(title="Distribution of mRNA",
+       x ="", y = "mRNA per cell")+
+  theme_pubr() +
+  theme(axis.text.x=element_text(angle = 60, hjust = 1))
+```

@@ -1,0 +1,172 @@
+---
+title: "Figure 6D code"
+author: "Anna Kogan"
+date: "2026-10-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r Libraries, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(ggpubr)
+library(tidyverse)
+library(dplyr)
+library("RColorBrewer")
+library(scales)
+```
+
+"Main folder" - folder on the drive with the whole experiment In this main folder 1 sub folder = 1 experimental sample "All directories" - a full list (with paths) of the directories in the folder
+
+DAPI-masked data
+
+```{r TS_Folder}
+main_folder <- "E:/M096_DAPI"
+all_dirs <- paste(list.files(main_folder, full.names = TRUE), "/", sep = "")
+all_dir_names <- list.files(main_folder, full.names = FALSE)
+print(paste("Number of folders:",length(all_dirs), sep = " "))
+print(paste("The first few folders:", paste(all_dir_names[1], all_dir_names[2], all_dir_names[3], all_dir_names[4], sep = " "), sep = " "))
+```
+```{r Column_names}
+subfolder.names <- list.files(main_folder, full.names = TRUE)
+
+#collects subfolder names for the sample names, change dependent on your pattern
+colnames.all.files <- list.files(main_folder)
+
+for (i in 1:length(colnames.all.files)){
+  colnames.all.files[i] <-
+    sub("_", " ", substr(colnames.all.files[i], 6, nchar(colnames.all.files[i])))
+}
+
+#collects subfolder names for the sample names, input your pattern
+colnames.merged.files <- list.files(main_folder)[(1:2)*3-2]
+for (i in 1:length(colnames.merged.files)){
+  colnames.merged.files[i] <-
+    sub("_", " ", substr(colnames.merged.files[i], 6, nchar(colnames.merged.files[i])-2))
+}
+
+```
+
+
+Analysis for nascent transcription - counts number of transcription sites per cell:
+
+Collect two databases: one with individual replicates, one with merged replicates
+
+```{r TS_count_all}
+
+#this is list of file names
+arrays3D <- list.files(subfolder.names, pattern = "700_25_count_In_Result",full.names = TRUE)
+
+first.file <- read.delim(arrays3D[1], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+colnames(first.file) <- c("cell", "1")
+
+#cbinds the other files using first column to merge them
+for(i in 2:(length(arrays3D))){
+
+  file1 <- read.delim(arrays3D[i], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+  colnames(file1) <- c("cell", (i))
+  
+  first.file <- merge(first.file, file1, 
+                      by = "cell", all = TRUE)
+} 
+
+#remove first column, apply gather, omit NAs
+TS_count.all <- first.file[,-1]
+#write.csv(x = TS_count.all, file = paste(main_folder, "/TS_count_all_Result.csv", sep=""))
+
+
+colnames(TS_count.all) <- colnames.all.files
+
+TS_count.all_gathered <- na.omit(gather(TS_count.all, key = "cell", value = "TS_count"))
+
+TS_count.all_gathered$ones <- 1
+#order the data and some other data manipulations 
+TS_count.all_gathered <- TS_count.all_gathered[order(TS_count.all_gathered$cell, TS_count.all_gathered$TS_count),]
+
+#calculating frequency of specific numbers of TS 
+options(dplyr.summarise.inform = FALSE)
+TS_count.all_gathered <- TS_count.all_gathered %>% group_by(cell, TS_count) %>% summarise(Freq= n())
+
+```
+
+```{r TS_count_merged}
+
+arrays3D <- list.files(subfolder.names, pattern = "700_25_count_In_Result",full.names = TRUE)
+
+first.file <- read.delim(arrays3D[1], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+colnames(first.file) <- c("cell", "1")
+
+second.file <- read.delim(arrays3D[2], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+colnames(second.file) <- c("cell", "1")
+
+third.file <- read.delim(arrays3D[3], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+colnames(third.file) <- c("cell", "1")
+
+first.file <- rbind(first.file, second.file, third.file)
+
+first.file[,1] <- 1:nrow(first.file)
+
+#cbinds the other files using first column to merge them
+for(i in 2:(length(arrays3D)/3)){
+  file1 <- ""
+  file2 <- ""
+  file3 <- ""
+  
+  file1 <- read.delim(arrays3D[3*i-2], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+  colnames(file1) <- c("cell", (3*i-2))
+  
+  file2 <- read.delim(arrays3D[3*i-1], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+  colnames(file2) <- c("cell", (3*i-2))
+  
+  file3 <- read.delim(arrays3D[3*i], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+  colnames(file3) <- c("cell", (3*i-2))
+  
+  file1 <- rbind(file1, file2, file3)
+  
+  file1[,1] <- 1:nrow(file1)
+  first.file <- merge(first.file, file1, 
+                      by = "cell", all = TRUE)
+}
+
+#remove first column, apply gather, omit NAs
+TS_count.merged <- first.file[,-1]
+colnames(TS_count.merged) <- colnames.merged.files
+
+TS_count.merged_gathered <- na.omit(gather(TS_count.merged, key = "cell", value = "TS_count"))
+
+TS_count.merged_gathered$ones <- 1
+#order the data and some other data manipulations 
+TS_count.merged_gathered <- TS_count.merged_gathered[order(TS_count.merged_gathered$cell, TS_count.merged_gathered$TS_count),]
+
+#calculating frequency of specific numbers of TS 
+options(dplyr.summarise.inform = FALSE)
+TS_count.merged_gathered <- TS_count.merged_gathered %>% group_by(cell, TS_count) %>% summarise(Freq= n())
+
+```
+
+Plots:
+
+```{r TS_count_all_plot}
+ggplot(TS_count.all_gathered, aes(fill = TS_count, y = Freq, x = cell))+
+  scale_fill_gradient2(limits=c(0, 12), low=muted("dark red"), mid="floral white", high="light blue", midpoint=6)+
+  geom_bar(position = "fill", stat = "identity")+
+  labs(x ="", y = "Proportion of cells")+
+  theme_pubr()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+#for analysis in Prism:
+#TS_count_stats <- sapply(TS_count.all, mean, na.rm = TRUE)
+
+```
+
+```{r TS_count_merged_plot}
+ggplot(TS_count.merged_gathered, aes(fill = TS_count, y = Freq, x = cell))+
+  scale_fill_gradient2(limits=c(0, 12), low=muted("dark red"), mid="floral white", high="light blue", midpoint=6)+
+  geom_bar(position = "fill", stat = "identity")+
+  labs(x ="", y = "Proportion of cells")+
+  theme_pubr()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+```

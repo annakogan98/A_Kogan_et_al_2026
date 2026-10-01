@@ -1,0 +1,590 @@
+---
+title: "Figures 4D 5C 5D"
+author: "Anna Kogan"
+date: "2026-09-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r Libraries, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(ggpubr)
+library(tidyverse)
+library(dplyr)
+library("RColorBrewer")
+library(scales)
+```
+
+"Main folder" - folder on the drive with the whole experiment In this main folder 1 sub folder = 1 experimental sample "All directories" - a full list (with paths) of the directories in the folder
+
+```{r Folder}
+main_folder <- "E:/M050_tiffs/"
+all_dirs <- paste(list.files(main_folder, full.names = TRUE)[1:30], "/", sep = "")
+all_dir_names <- list.files(main_folder, full.names = FALSE)[1:30]
+print(paste("Number of folders:",length(all_dirs), sep = " "))
+print(paste("The first few folders:", paste(all_dir_names[1], all_dir_names[2], all_dir_names[3], all_dir_names[4], sep = " "), sep = " "))
+```
+
+
+This chunk of the code goes through each folder and finds the results from the 3D object counter (csv files) 1) Generates a csv with mRNA counts per cell for each sample 2) Generates a csv with the number of TS per cell for each sample 3) Generates a csv with a list of all TS and their integrated densities for each sample
+
+Commented out - bits that could generate a histogram of each of those csv and save it in the same folder, run if needed
+
+NB! Modify the intensity and size threshold that were used in 3D object counter to correctly detect and label files
+
+```{r Make_SCV_files_for_each_sample} 
+
+for (d in 1:length(all_dirs)) {
+
+dir_masks <- paste(all_dirs[d], "OutputMASK/masks/singlecellmasks/", sep = "")
+subfolder.names<-list.dirs(dir_masks)
+
+
+#### mRNA ####
+#collects count of mRNA per cell to the out.file
+out.file<-""
+arrays3D <- list.files(subfolder.names, pattern = "400_30",full.names = TRUE)
+for(i in 1:length(arrays3D)){
+  new_file <- read.delim(arrays3D[i], header = TRUE, sep = ",", dec = ".")
+  spot_count <- nrow(new_file)
+  out.file <- rbind(out.file, spot_count)
+}
+
+out.file <- out.file[-1]
+out.file <- as.integer(out.file)
+
+write.csv(x = out.file, file = paste(all_dirs[d], all_dir_names[d], "_400_30_Ex_Result.csv", sep=""))
+
+# ### mRNA plot ####
+# mRNA_count <- data.frame(out.file)
+# mRNA <- ggplot(mRNA_count, aes(x=out.file)) +
+#   stat_count()+
+#   labs(y = "", x = "Number of mRNA per cell") +
+#   theme_pubr()
+# mRNA
+# ggsave(plot = mRNA, device = "pdf", path = all_dirs[d], filename = paste(all_dir_names[d],"_mRNA.pdf", sep = ""))
+
+
+#### TS count ####
+#collects count of TS per cell to the out.file
+arrays3D <- list.files(subfolder.names, pattern = "700_25",full.names = TRUE)
+out.file<-""
+for(i in 1:length(arrays3D)){
+  new_file <- read.delim(arrays3D[i], header = TRUE, sep = ",", dec = ".")
+  new_file <- new_file[new_file$Volume..px.3.>100,]
+  spot_count <- nrow(new_file)
+  out.file <- rbind(out.file, spot_count)
+}
+
+out.file <- out.file[-1]
+out.file <- as.integer(out.file)
+write.csv(x = out.file, file = paste(all_dirs[d], all_dir_names[d], "_700_25_Vol_count_In_Result.csv", sep=""))
+
+
+# #### TS count plot ####
+# TS_count <- data.frame(out.file) #saves TS per cell to TS_count
+# 
+# NofTS <- ggplot(TS_count, aes(x=out.file)) +
+#   stat_count()+
+#   labs(y = "", x = "Number of TS per cell") +
+#   theme_pubr()
+# NofTS #could save this
+# ggsave(plot = NofTS, path = all_dirs[d], device = "pdf", filename = paste(all_dir_names[d],"_N_of_TS.pdf"))
+
+
+#### TS IntDens ####
+arrays3D <- list.files(subfolder.names, pattern = "700_25",full.names = TRUE)
+out.file<-""            # this is an empty list of molecules
+
+
+all.file <- read.delim(arrays3D[1], header = TRUE, sep = ",", dec = ".")
+
+for(i in 2:length(arrays3D)){
+  new_file <- read.delim(arrays3D[i], header = TRUE, sep = ",", dec = ".")
+  all.file <- rbind(all.file, new_file)
+}
+IntDens <- all.file[, c(1,5)]
+write.csv(x = IntDens, file = paste(all_dirs[d], all_dir_names[d], "_700_25_Vol_Int_In_Result.csv", sep=""))
+
+
+
+# #### TS IntDens plot ####
+# TS_IntDens <- data.frame(IntDens)
+# IntDens_of_TS <- ggplot(TS_IntDens, aes(x=IntDens)) +
+#   geom_histogram(bins = 10) +
+#   labs(y = "", x = "IntDens of TS") +
+#   theme_pubr()
+# IntDens_of_TS
+# ggsave(plot = IntDens_of_TS, device = "pdf", path = all_dirs[d], filename = paste(all_dir_names[d],"_IntDens_of_TS.pdf"))
+
+
+}
+```
+
+
+```{r Column_names}
+subfolder.names <- list.files(main_folder, full.names = TRUE)
+
+#collects subfolder names for the sample names, change dependent on your pattern
+colnames.all.files <- list.files(main_folder)[1:30]
+
+for (i in 1:length(colnames.all.files)){
+  colnames.all.files[i] <-
+    sub("_", " ", sub("_", " ", substr(colnames.all.files[i], 14, nchar(colnames.all.files[i]))))
+}
+
+#collects subfolder names for the sample names, input your pattern
+colnames.merged.files <- list.files(main_folder)[(1:10)*3-2]
+for (i in 1:length(colnames.merged.files)){
+  colnames.merged.files[i] <-
+    sub("_", " ", sub("_", " ", substr(colnames.merged.files[i], 14, nchar(colnames.merged.files[i])-3)))
+}
+
+```
+
+
+Analysis for mRNA:
+
+Collect two databases: one with individual replicates, one with merged replicates
+
+```{r mRNA_all}
+
+#makes a list of csv files:
+arrays3D <- list.files(subfolder.names, pattern = "_400_30_Ex_Result",full.names = TRUE)
+
+#reads the first file
+first.file <- read.delim(arrays3D[1], header = TRUE, sep = ",", dec = ".")
+colnames(first.file) <- c("cell", "1")
+
+#cbinds the other files using first column to merge them
+for(i in 2:(length(arrays3D))){
+  new_file <- ""
+  new_file <- read.delim(arrays3D[i], header = TRUE, sep = ",", dec = ".") 
+  colnames(new_file) <- c("cell", (i))
+  first.file <- merge(first.file, new_file, 
+                    by = "cell", all = TRUE)
+  
+}
+
+mRNA_all  <-  first.file[,-1]
+colnames(mRNA_all) <- colnames.all.files
+
+#write.csv(mRNA_all, file = "E:/M050_mRNA_all_paper.csv")
+
+
+##for further Prism analysis:
+mRNA_means <- data.frame(
+  Column_Names = colnames(mRNA_all),
+  Ave = sapply(mRNA_all, mean, na.rm = TRUE)
+)
+mRNA_means$Ave
+
+
+```
+
+```{r mRNA_merged}
+
+#makes a list of csv files:
+arrays3D <- list.files(subfolder.names, pattern = "_400_30_Ex_Result",full.names = TRUE)
+
+#reads the first 3 files
+first.file <- read.delim(arrays3D[1], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+colnames(first.file) <- c("cell", "1")
+
+second.file <- read.delim(arrays3D[2], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+colnames(second.file) <- c("cell", "1")
+
+third.file <- read.delim(arrays3D[3], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+colnames(third.file) <- c("cell", "1")
+
+first.file <- rbind(first.file, second.file, third.file)
+first.file[,1] <- 1:nrow(first.file)
+
+
+#cbinds the other files using first column to merge them
+for(i in 2:(length(arrays3D)/3)){
+  
+  file1 <- read.delim(arrays3D[3*i-2], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+  colnames(file1) <- c("cell", (3*i-2))
+  
+  file2 <- read.delim(arrays3D[3*i-1], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+  colnames(file2) <- c("cell", (3*i-2))
+  
+  file3 <- read.delim(arrays3D[3*i], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+  colnames(file3) <- c("cell", (3*i-2))
+  
+  file1 <- rbind(file1, file2, file3)
+  
+  file1[,1] <- 1:nrow(file1)
+  first.file <- merge(first.file, file1, 
+                      by = "cell", all = TRUE)
+  
+}
+
+mRNA_merged  <-  first.file[,-1]
+colnames(mRNA_merged) <- colnames.merged.files
+```
+
+Plot:
+
+```{r mRNA_all_plot}
+#prepare for plotting
+mRNA_all_gathered <- na.omit(gather(mRNA_all, key="sample",value = "mRNA_per_cell" ))
+#plot
+ggplot(mRNA_all_gathered, aes(y = mRNA_per_cell, x = sample)) +
+  geom_violin(trim = TRUE, fill="peru", scale = "width",
+             draw_quantiles = c(0.25, 0.5, 0.75)) +
+  stat_summary_bin(fun = "mean", geom = "bar", colour = "black", fill = "white", alpha = 0.5)+
+  labs(title="Distribution of mRNA",
+       x ="", y = "mRNA per cell")+
+  theme_pubr() +
+  theme(axis.text.x=element_text(angle = 60, hjust = 1))
+```
+
+Figure 4D:
+
+```{r mRNA_merged_plot}
+#prepare for plotting
+mRNA_merged_gathered <- na.omit(gather(mRNA_merged, key="sample",value = "mRNA_per_cell" ))
+#plot
+ggplot(mRNA_merged_gathered, aes(y = mRNA_per_cell, x = sample)) +
+  geom_violin(trim = TRUE, fill="peru", scale = "width",
+             draw_quantiles = c(0.25, 0.5, 0.75)) +
+  stat_summary_bin(fun = "mean", geom = "bar", colour = "black", fill = "white", alpha = 0.5)+
+  labs(title="Distribution of mRNA",
+       x ="", y = "mRNA per cell")+
+  theme_pubr() +
+  theme(axis.text.x=element_text(angle = 60, hjust = 1))
+```
+
+Analysis for nascent transcription - calculates integrated densities at transcription sites:
+
+Collect two databases: one with individual replicates, one with merged replicates
+
+```{r IntDens_all}
+
+#makes a list of csv files:
+arrays3D <- list.files(subfolder.names, pattern = "700_25_Vol_Int_In_Result",full.names = TRUE)
+
+#reads the first file
+first.file <- read.delim(arrays3D[1], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+colnames(first.file) <- c("cell", "Vol", "1")
+#removes transcriptions cites with volume<=100
+first.file <- first.file[first.file$Vol>100,c(1,3)]
+first.file$cell <- c(1:nrow(first.file))
+
+#cbinds the other files using first column to merge them
+for(i in 2:(length(arrays3D))){
+  new_file <- read.delim(arrays3D[i], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+  colnames(new_file) <- c("cell", "Vol",(i))
+  if (nrow(new_file) > 0) {
+  new_file <- new_file[new_file$Vol>100,c(1,3)]
+    if (nrow(new_file) == 0) {
+      new_file <- data.frame(cell = integer(), IntDen = integer())
+      colnames(new_file) <- c("cell", i)
+      new_file[1,] <- c(1,100)
+    }
+  new_file$cell <- c(1:nrow(new_file))
+  } else {
+  new_file <- data.frame(cell = integer(), IntDen = integer())
+  colnames(new_file) <- c("cell", i)
+  new_file[1,] <- c(1,100)
+  }
+  first.file <- merge(first.file, new_file, 
+                      by = "cell", all = TRUE)
+}
+
+IntDens.all <- first.file[,-1]
+colnames(IntDens.all) <- colnames.all.files
+
+write.csv(IntDens.all, file = "E:/M050_TS_intensity_paper.csv")
+```
+
+```{r IntDens_all_plot}
+IntDens.all_gathered <- na.omit(gather(IntDens.all, key = "sample", value = "intdens"))
+
+ggplot(IntDens.all_gathered, aes(x = sample, y = intdens))+
+  geom_dotplot(binaxis = 'y', stackdir = "center", stackratio = 1, dotsize = 0.5, , binwidth =  0.025)+
+  #stat_summary_bin(fun = "mean", geom = "bar", colour = "black", fill = "white", alpha = 0.5)+
+  scale_y_log10() +
+  labs(title="Distribution of TS Integrated densities",
+       x ="", y = "Integrated density")+
+  theme_pubr()+
+  #ylim(-10,1000000) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+
+```{r IntDens_merged}
+
+arrays3D <- list.files(subfolder.names, pattern = "700_25_IntDen_In_Result",full.names = TRUE)
+
+#reads the first file
+first.file <- read.delim(arrays3D[1], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+colnames(first.file) <- c("cell", "1")
+
+second.file <- read.delim(arrays3D[2], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+colnames(second.file) <- c("cell", "1")
+
+third.file <- read.delim(arrays3D[3], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+colnames(third.file) <- c("cell", "1")
+
+first.file <- rbind(first.file, second.file, third.file)
+
+first.file[,1] <- 1:nrow(first.file)
+
+#cbinds the other files using first column to merge them
+for(i in 2:(length(arrays3D)/3)){
+  
+  file1 <- read.delim(arrays3D[3*i-2], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+  colnames(file1) <- c("cell", (3*i-2))
+  
+  file2 <- read.delim(arrays3D[3*i-1], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+  colnames(file2) <- c("cell", (3*i-2))
+  
+  file3 <- read.delim(arrays3D[3*i], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+  colnames(file3) <- c("cell", (3*i-2))
+  
+  file1 <- rbind(file1, file2, file3)
+  
+  file1[,1] <- 1:nrow(file1)
+  first.file <- merge(first.file, file1, 
+                      by = "cell", all = TRUE)
+  
+}
+
+
+IntDens.merged <- first.file[,-1]
+colnames(IntDens.merged) <- colnames.merged.files
+```
+
+
+To do statistics on allele intensity, they need to be balanced between priming and reinduction (naive and primed throughout this code), so calculate medians of random subsets of each timepoint and replicate, and then calculate the mean of these medians, using them for stats
+
+``` {r Intdens stats}
+
+
+timepoints <- unique(substr(colnames(IntDens.all),5,7))
+data <- data.frame(matrix(nrow = 100, ncol = ncol(IntDens.all)))
+colnames(data) <- colnames(IntDens.all)
+ncounts <- ""
+
+for (tp in timepoints) {
+  # Get all columns for this timepoint (both neg and pos)
+  cols <- grep(tp, colnames(IntDens.all), value = TRUE)
+  
+  # Count non-NA rows for each replicate
+  non_na_counts <- apply(IntDens.all[, cols], 2, function(x) sum(!is.na(x)))
+  
+  # Find minimum number of non-NA rows across all replicates of this timepoint
+  min_rows <- min(non_na_counts)
+  ncounts <- c(ncounts,(min_rows-1))
+  # For each replicate, randomly sample min_rows non-NA values
+  for(col in cols) {
+    # Get indices of non-NA values
+    valid_indices <- which(!is.na(IntDens.all[[col]]))
+    med.list <- ""
+    if(length(valid_indices) > (min_rows-1)) {
+      for (i in 1:100) {
+      keep_indices <- sample(valid_indices, (min_rows-1))
+      med.list[i] <- median(IntDens.all[keep_indices,col])
+      }
+      data[, col] <- as.numeric(med.list)
+    }
+  }
+}
+
+ncounts
+
+IntDens_sampled_stats <- data.frame(
+  Column_Names = colnames(data),
+  Sample = substr(colnames(data),0,7), #for merging with the raw datapoints
+  Mean = sapply(data, mean, na.rm = TRUE), 
+  Median = sapply(data, median, na.rm = TRUE)
+)
+
+IntDens_sampled_stats$Mean
+```
+
+
+To plot the merged file in a more representative way, subset the number of alleles between priming and reinduction, figure 5C: 
+
+``` {r Balancin and subsetting}
+IntDens.merged.cut <- IntDens.merged[,c(2:5,7:10)]
+
+max_06h <- min(length(na.omit(IntDens.merged.cut[,1])),length(na.omit(IntDens.merged.cut[,5])))
+max_12h <- min(length(na.omit(IntDens.merged.cut[,2])),length(na.omit(IntDens.merged.cut[,6])))
+max_18h <- min(length(na.omit(IntDens.merged.cut[,3])),length(na.omit(IntDens.merged.cut[,7])))
+max_24h <- min(length(na.omit(IntDens.merged.cut[,4])),length(na.omit(IntDens.merged.cut[,8])))
+
+end <- nrow(IntDens.merged.cut)
+
+IntDens.merged.cut[c(max_06h+1:end),1] <- NA
+IntDens.merged.cut[c(max_06h+1:end),5] <- NA
+
+IntDens.merged.cut[c(max_12h+1:end),2] <- NA
+IntDens.merged.cut[c(max_12h+1:end),6] <- NA
+
+IntDens.merged.cut[c(max_18h+1:end),3] <- NA
+IntDens.merged.cut[c(max_18h+1:end),7] <- NA
+
+IntDens.merged.cut[c(max_24h+1:end),4] <- NA
+IntDens.merged.cut[c(max_24h+1:end),8] <- NA
+
+
+IntDens.merged.cut_gathered <- na.omit(gather(IntDens.merged.cut, key = "sample", value = "intdens"))
+
+IntDens_sample_stats_gathered <- na.omit(gather(IntDens_sampled_stats[,c(2:3)], key = "Sample", value = "Mean"))
+
+```
+
+Plot in Figure 5C:
+
+``` {r IntDens balanced}
+
+ggplot(IntDens.merged.cut_gathered, aes(x = sample, y = intdens))+
+  geom_dotplot(binaxis = 'y', stackdir = "center", stackratio = 1, dotsize = 0.5, , binwidth =  0.025)+
+  scale_y_log10()+
+  theme_pubr()+
+  
+  labs(title="Distribution of TS Integrated densities",
+       x ="", y = "Integrated density")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+```
+
+
+
+Analysis for nascent transcription - counts number of transcription sites per cell:
+
+Collect two databases: one with individual replicates, one with merged replicates
+
+```{r TS_count_all}
+
+#this is list of file names
+arrays3D <- list.files(subfolder.names, pattern = "700_25_Vol_count_In_Result",full.names = TRUE)
+
+first.file <- read.delim(arrays3D[1], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+colnames(first.file) <- c("cell", "1")
+
+#cbinds the other files using first column to merge them
+for(i in 2:(length(arrays3D))){
+
+  file1 <- read.delim(arrays3D[i], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+  colnames(file1) <- c("cell", (i))
+  
+  first.file <- merge(first.file, file1, 
+                      by = "cell", all = TRUE)
+} 
+
+#remove first column, apply gather, omit NAs
+TS_count.all <- first.file[,-1]
+colnames(TS_count.all) <- colnames.all.files
+
+TS_count.all_gathered <- na.omit(gather(TS_count.all, key = "cell", value = "TS_count"))
+
+TS_count.all_gathered$ones <- 1
+#order the data and some other data manipulations 
+TS_count.all_gathered <- TS_count.all_gathered[order(TS_count.all_gathered$cell, TS_count.all_gathered$TS_count),]
+
+#calculating frequency of specific numbers of TS 
+options(dplyr.summarise.inform = FALSE)
+TS_count.all_gathered <- TS_count.all_gathered %>% group_by(cell, TS_count) %>% summarise(Freq= n())
+
+write.csv(TS_count.all, file = "E:/M050_TS_count_all_paper.csv")
+
+
+```
+
+
+```{r TS_count_merged}
+
+arrays3D <- list.files(subfolder.names, pattern = "700_25_Vol_count_In_Result",full.names = TRUE)
+
+first.file <- read.delim(arrays3D[1], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+colnames(first.file) <- c("cell", "1")
+
+second.file <- read.delim(arrays3D[2], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+colnames(second.file) <- c("cell", "1")
+
+third.file <- read.delim(arrays3D[3], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+colnames(third.file) <- c("cell", "1")
+
+first.file <- rbind(first.file, second.file, third.file)
+
+first.file[,1] <- 1:nrow(first.file)
+
+#cbinds the other files using first column to merge them
+for(i in 2:(length(arrays3D)/3)){
+  file1 <- ""
+  file2 <- ""
+  file3 <- ""
+  
+  file1 <- read.delim(arrays3D[3*i-2], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+  colnames(file1) <- c("cell", (3*i-2))
+  
+  file2 <- read.delim(arrays3D[3*i-1], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+  colnames(file2) <- c("cell", (3*i-2))
+  
+  file3 <- read.delim(arrays3D[3*i], header = TRUE, sep = ",", dec = ".") # paste() merges strings for full path
+  colnames(file3) <- c("cell", (3*i-2))
+  
+  file1 <- rbind(file1, file2, file3)
+  
+  file1[,1] <- 1:nrow(file1)
+  first.file <- merge(first.file, file1, 
+                      by = "cell", all = TRUE)
+}
+
+#remove first column, apply gather, omit NAs
+TS_count.merged <- first.file[,-1]
+colnames(TS_count.merged) <- colnames.merged.files
+
+TS_count.merged_gathered <- na.omit(gather(TS_count.merged, key = "cell", value = "TS_count"))
+
+TS_count.merged_gathered$ones <- 1
+#order the data and some other data manipulations 
+TS_count.merged_gathered <- TS_count.merged_gathered[order(TS_count.merged_gathered$cell, TS_count.merged_gathered$TS_count),]
+
+#calculating frequency of specific numbers of TS 
+options(dplyr.summarise.inform = FALSE)
+TS_count.merged_gathered <- TS_count.merged_gathered %>% group_by(cell, TS_count) %>% summarise(Freq= n())
+
+```
+
+Plots:
+
+```{r TS_count_all_plot}
+ggplot(TS_count.all_gathered, aes(fill = TS_count, y = Freq, x = cell))+
+  scale_fill_gradient2(limits=c(0, 12), low=muted("dark red"), mid="floral white", high="light blue", midpoint=6)+
+  geom_bar(position = "fill", stat = "identity")+
+  labs(x ="", y = "Proportion of cells")+
+  theme_pubr()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+##for further Prism analysis:
+TS_count_means <- data.frame(
+  Column_Names = colnames(TS_count.all),
+  Ave = sapply(TS_count.all, mean, na.rm = TRUE)
+)
+TS_count_means$Ave
+```
+
+
+Plot in Figure 5D: 
+
+```{r TS_count_merged_plot}
+ggplot(TS_count.merged_gathered, aes(fill = TS_count, y = Freq, x = cell))+
+  scale_fill_gradient2(limits=c(0, 12), low=muted("dark red"), mid="floral white", high="light blue", midpoint=6)+
+  geom_bar(position = "fill", stat = "identity")+
+  labs(x ="", y = "Proportion of cells")+
+  theme_pubr()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+
+```
